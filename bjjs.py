@@ -36,7 +36,7 @@ def doRequest2(url):
     data = response.read()
     return data
 
-def getList():
+def getHtmlContent():
     params = {
         "isTrue":"0",
         "projectName":"项目名称关键字",
@@ -61,29 +61,114 @@ def getList():
     data = doPostRequest2('http://www.bjjs.gov.cn/eportal/ui?pageId=307674&isTrue=1',params)
     return data
 
-class  MyParser(html.parser.HTMLParser):
-        is_span = 0
 
-        def  handle_starttag(self, tag, attrs):
-            if tag == 'span':
-                self.is_span=True
+def parseHtmlContent():
+    data = getHtmlContent()
+    data = urllib.parse.quote_from_bytes(data)
+    data = urllib.parse.unquote(data)
+    p='总记录数:(\d+)([^\d]+)每页显示(\d+)'
+    m = re.search(p,data)
+    if m is None:
+        print('Horrible error!regular expression is wrong!\n')
+        renturn -1
+    total = int(m.groups()[0])
+    step = int(m.groups()[2])
+    print(total,step)
+    parser=PageParser()
+    parser.feed(data)
+    parser.close()
+    return parser.getAllData()
+
+class  PageParser(html.parser.HTMLParser):
+        is_span = 0
+        is_data_next = 0
+        is_in_table = 0
+        is_in_tr = 0
+        data_row = []
+        data_all = []
+        is_skip_title = 0
+        is_in_tr = 0
+
+
+        def getAllData(self):
+            return self.data_all
+
+        def doSpanStatus(self,tag,is_endtag=0):
+            if tag == 'span' and is_endtag == 0:
+                self.is_span = 1
+            if tag == 'span' and is_endtag == 1:
+                self.is_span = 0
+
+        def doDataNextStatus(self,data):
+            if self.is_span != 1:
+                return
+            if self.is_data_next == 1:
+                return
+            if data == '预售商品房非住宅项目公示':
+                self.is_data_next = 1
+
+        def doDataTableStatus(self,tag,is_endtag=0):
+            if tag is not 'table' \
+                and self.is_data_next != 1:
+                return
+            if is_endtag == 0 :
+                self.is_in_table = 1
+            if is_endtag == 1 :
+                self.is_in_table = 0
+                self.is_data_next = 0
+            
+        def doEachTrStatus(self,tag,is_endtag=0):
+            if tag is not 'tr' \
+                or self.is_in_table == 0:
+                return
+            if self.is_skip_title == 0 \
+                and is_endtag == 1:
+                self.is_skip_title = 1
+            if is_endtag == 0:
+                self.is_in_tr = 1
+            if is_endtag == 1:
+                self.is_in_tr = 0
+                data_all.append(data_row);
+                data_row = [];
+        
+        def parseEachTr(self,tag,att):
+            if tag is 'tr' \
+                or self.is_in_tr == 0:
+                return
+
+            if type(attrs) is not type(dict()):
+                return
+            if 'href' in att:
+                data_row.append(att['href'])
+
+        def doTdData(self,data):
+            if self.is_in_tr == 0:
+                return
+            data_row.append(data)
+
+
+        def handle_starttag(self, tag, attrs):
+            self.doSpanStatus(tag)
+            self.doDataTableStatus(tag)
+            self.doEachTrStatus(tag)
+            self.parseEachTr(tag,attrs)
+
+
+        def handle_endtag(self, tag):
+            self.doSpanStatus(tag,1)
+            self.doDataTableStatus(tag,1)
+            self.doEachTrStatus(tag,1)
 
         def handle_data(self, data):
-            if self.is_span == True:
-                print(data)
+            self.doDataNextStatus(data)
+            self.doTdData(data)
 
 
 
-data = getList()
-data = urllib.parse.quote_from_bytes(data)
-data = urllib.parse.unquote(data)
+data = parseHtmlContent()
 print(data)
-p = "总记录数:(\d+).*每页显示(\d+)"
-p = p.encode(encoding='utf-8')
-p = str(p)
-m = re.match(p,data)
-print(m)
-print(m.group())
+
+
 #print(data)
 #p=MyParser()
 #p.feed(data)
