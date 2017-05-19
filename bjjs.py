@@ -88,7 +88,7 @@ class  PageParser(html.parser.HTMLParser):
         data_all = []
         is_skip_title = 0
         is_in_tr = 0
-
+        tag_idx = ''
 
         def getAllData(self):
             return self.data_all
@@ -108,8 +108,8 @@ class  PageParser(html.parser.HTMLParser):
                 self.is_data_next = 1
 
         def doDataTableStatus(self,tag,is_endtag=0):
-            if tag is not 'table' \
-                and self.is_data_next != 1:
+            if tag != 'table' \
+                or self.is_data_next == 0:
                 return
             if is_endtag == 0 :
                 self.is_in_table = 1
@@ -118,36 +118,45 @@ class  PageParser(html.parser.HTMLParser):
                 self.is_data_next = 0
             
         def doEachTrStatus(self,tag,is_endtag=0):
-            if tag is not 'tr' \
+            if tag != 'tr' \
                 or self.is_in_table == 0:
+                return
+            if self.is_skip_title == 0 and is_endtag == 0:
                 return
             if self.is_skip_title == 0 \
                 and is_endtag == 1:
                 self.is_skip_title = 1
+                return
             if is_endtag == 0:
                 self.is_in_tr = 1
             if is_endtag == 1:
                 self.is_in_tr = 0
-                data_all.append(data_row);
-                data_row = [];
+                self.data_all.append(self.data_row);
+                self.data_row = [];
         
-        def parseEachTr(self,tag,att):
-            if tag is 'tr' \
-                or self.is_in_tr == 0:
+        def parseEachTr(self,tag,attrs):
+            if self.is_in_tr == 0:
                 return
 
-            if type(attrs) is not type(dict()):
+            if type(attrs) is not type([]):
                 return
-            if 'href' in att:
-                data_row.append(att['href'])
+            attr_key=attrs[0][0]
+            attr_value=attrs[0][1]
+            if attr_key == 'href':
+                attr_value=attr_value.strip()
+                self.data_row.append(attr_value)
 
         def doTdData(self,data):
             if self.is_in_tr == 0:
                 return
-            data_row.append(data)
+            data = data.strip()
+            if data == '':
+                return
+            self.data_row.append(data)
 
 
         def handle_starttag(self, tag, attrs):
+            self.tag_idx=tag
             self.doSpanStatus(tag)
             self.doDataTableStatus(tag)
             self.doEachTrStatus(tag)
